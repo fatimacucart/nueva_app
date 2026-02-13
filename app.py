@@ -1,90 +1,88 @@
-import streamlit as st
-from langchain_groq import ChatGroq
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from dotenv import load_dotenv
 import os
+import streamlit as st
+import pandas as pd
 
-load_dotenv()
+from langchain_groq import ChatGroq
+from langchain_experimental.agents import create_pandas_dataframe_agent
 
-st.set_page_config(page_title="Content Generator 🤖", page_icon="🤖")
-st.title("Content generator")
+st.set_page_config(page_title="Excel Q&A 🤖", page_icon="📊")
+st.title("📊 IA para consultar el Excel")
 
 # -------------------------------
-# 🔑 API KEY Input (User Option)
+# 🔑 API KEY (obligatoria)
 # -------------------------------
 st.sidebar.header("🔐 Groq API Key")
-
-user_api_key = st.sidebar.text_input(
-    "Enter your Groq API Key:",
+api_key_input = st.sidebar.text_input(
+    "Introduce tu Groq API Key:",
     type="password",
     placeholder="gsk-xxxxxxxxxxxxxxxx"
 )
 
-# Prioridad: 1. Input del usuario, 2. Variables de entorno (.env o Secrets de Streamlit)
-api_key = user_api_key or os.getenv("GROQ_API_KEY")
+# Prioridad: Input manual o variable de entorno
+api_key = api_key_input or os.getenv("GROQ_API_KEY")
 
 if not api_key:
-    st.sidebar.warning("⚠️ Please enter your Groq API Key to continue.")
+    st.warning("⚠️ Debes introducir tu Groq API Key en la barra lateral para usar la aplicación.")
     st.stop()
 
 # -------------------------------
-# UI Inputs
+# 📄 Cargar Excel fijo
 # -------------------------------
-topic = st.text_input("Topic:", placeholder="e.g., nutrition, mental health...")
-platform = st.selectbox("Platform:", ['Instagram', 'Facebook', 'LinkedIn', 'Blog', 'E-mail'])
-tone = st.selectbox("Message tone:", ['Normal', 'Informative', 'Inspiring', 'Urgent', 'Informal'])
-length = st.selectbox("Text length:", ['Short', 'Medium', 'Long'])
-audience = st.selectbox("Target audience:", ['All', 'Young adults', 'Families', 'Seniors', 'Teenagers'])
-cta = st.checkbox("Include CTA")
-hashtags = st.checkbox("Return Hashtags")
-keywords = st.text_area("Keywords (SEO):", placeholder="Example: wellness, preventive healthcare...")
+EXCEL_PATH = "Empleados.arff.csv.xlsx"
+
+if not os.path.exists(EXCEL_PATH):
+    st.error(f"No encuentro el archivo '{EXCEL_PATH}'.")
+    st.stop()
+
+try:
+    df = pd.read_excel(EXCEL_PATH)
+except Exception as e:
+    st.error(f"No se pudo leer el Excel: {e}")
+    st.stop()
 
 # -------------------------------
-# Generation function (MODIFICADA)
+# 👀 Vista previa
 # -------------------------------
-def llm_generate(api_key, prompt):
-    # Creamos el modelo AQUÍ adentro, asegurando que ya tenemos la API KEY
-    llm = ChatGroq(
-        groq_api_key=api_key, # Pasamos la clave directamente al constructor
-        model="llama-3.3-70b-versatile",
-        temperature=0.7,
-        max_retries=2,
-    )
-    
-    template = ChatPromptTemplate.from_messages([
-        ("system", "You are a digital marketing expert specialized in SEO and persuasive copywriting."),
-        ("human", "{prompt}"),
-    ])
+with st.expander("👀 Ver muestra del Excel"):
+    st.write(f"Filas: {df.shape[0]} | Columnas: {df.shape[1]}")
+    st.dataframe(df.head(10), use_container_width=True)
 
-    chain = template | llm | StrOutputParser()
-    res = chain.invoke({"prompt": prompt})
-    return res
+st.divider()
 
 # -------------------------------
-# Button Action
+# 💬 Preguntas del usuario
 # -------------------------------
-if st.button("Content generator"):
-    if not topic:
-        st.warning("Please provide a topic.")
+st.subheader("Haz una pregunta sobre el Excel")
+question = st.text_input("Ejemplo: ¿Cuál es el salario medio?")
+
+if st.button("Consultar 🤖"):
+    if not question.strip():
+        st.warning("Escribe una pregunta primero.")
     else:
-        prompt = f"""
-Write an SEO-optimized text on the topic '{topic}'.
-Return only the final text in your response and don't put it inside quotes.
-- Platform where it will be published: {platform}.
-- Tone: {tone}.
-- Target audience: {audience}.
-- Length: {length}.
-- {"Include a clear Call to Action." if cta else "Do not include a Call to Action."}
-- {"Include relevant hashtags at the end of the text." if hashtags else "Do not include hashtags."}
-{"- Keywords to include (for SEO): " + keywords if keywords else ""}
-"""
-        try:
-            with st.spinner('Generating content...'):
-                # Pasamos la api_key a la función
-                res = llm_generate(api_key, prompt)
-                st.markdown("### Generated Content:")
-                st.markdown(res)
-        except Exception as e:
-            st.error(f"Error: {e}")
+        with st.spinner("Analizando..."):
+            try:
+                # 🤖 CREAMOS EL LLM Y EL AGENTE AQUÍ ADENTRO
+                # Solo cuando el usuario hace clic, asegurando que la API KEY ya existe.
+                llm = ChatGroq(
+                    groq_api_key=api_key, # Pasamos la clave directamente
+                    model="llama-3.3-70b-versatile",
+                    temperature=0.2
+                )
+
+                agent = create_pandas_dataframe_agent(
+                    llm,
+                    df,
+                    verbose=False,
+                    allow_dangerous_code=True,
+                )
+
+                result = agent.invoke(question)
+                
+                if isinstance(result, dict) and "output" in result:
+                    st.success("Resultado:")
+                    st.markdown(result["output"])
+                else:
+                    st.write(result)
+            except Exception as e:
+                st.error(f"Error consultando el Excel: {e}")
 
