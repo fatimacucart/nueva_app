@@ -6,4 +6,4 @@ langchain-experimental
 groq==0.13.0
 pandas
 openpyxl
-
+tabulate
