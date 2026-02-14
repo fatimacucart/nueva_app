@@ -6,7 +6,7 @@ from langchain_groq import ChatGroq
 from langchain_experimental.agents import create_pandas_dataframe_agent
 
 st.set_page_config(page_title="Excel Q&A 🤖", page_icon="📊")
-st.title("📊 IA para consultar el Excel")
+st.title("Habla con tu Excel gracias a la IA")
 
 # -------------------------------
 # 🔑 API KEY (obligatoria)
