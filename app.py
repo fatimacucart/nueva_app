@@ -20,18 +20,16 @@ if not api_key:
 # --- CARGA DE EXCEL ---
 EXCEL_PATH = "Empleados.arff.csv.xlsx"
 
-if not os.path.exists(EXCEL_PATH):
-    st.error(f"No encuentro el archivo '{EXCEL_PATH}' en el repositorio.")
-    st.stop()
-
 @st.cache_data
 def load_data(path: str) -> pd.DataFrame:
+    if not os.path.exists(path):
+        return None
     return pd.read_excel(path, engine="openpyxl")
 
-try:
-    df = load_data(EXCEL_PATH)
-except Exception as e:
-    st.error(f"Error al leer el Excel: {e}")
+df = load_data(EXCEL_PATH)
+
+if df is None:
+    st.error(f"No encuentro el archivo '{EXCEL_PATH}' en el repositorio.")
     st.stop()
 
 with st.expander("👀 Ver muestra del Excel"):
@@ -40,38 +38,41 @@ with st.expander("👀 Ver muestra del Excel"):
 st.divider()
 
 # --- CONSULTA ---
-question = st.text_input("Haz una pregunta sobre el Excel:")
+question = st.text_input("Haz una pregunta sobre el Excel:", placeholder="Ej: ¿Cuál es el promedio de salario?")
 
 if st.button("Consultar 🤖"):
     if not question:
         st.warning("Escribe una pregunta.")
         st.stop()
 
-    with st.spinner("Analizando..."):
+    with st.spinner("La IA está analizando los datos..."):
         try:
             llm = ChatGroq(
                 groq_api_key=api_key,
                 model_name="llama-3.3-70b-versatile",
-                temperature=0.2,
+                temperature=0, # Bajamos a 0 para mayor precisión técnica
             )
 
+            # Cambiamos a OPENAI_FUNCTIONS y añadimos límites de seguridad
             agent = create_pandas_dataframe_agent(
                 llm=llm,
                 df=df,
                 verbose=False,
                 allow_dangerous_code=True,
-                agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+                agent_type=AgentType.OPENAI_FUNCTIONS, # Más rápido y eficiente
+                max_iterations=5,  # Evita que el agente se quede en bucle
+                handle_parsing_errors=True # Maneja errores de formato en la respuesta
             )
 
             result = agent.invoke({"input": question})
-
-            # LangChain a veces devuelve dict con "output" y a veces texto/objeto
+            
+            # Extraer respuesta limpia
             output = result.get("output") if isinstance(result, dict) else str(result)
 
             st.success("Resultado:")
             st.markdown(output)
 
         except Exception as e:
-            st.error(f"Error consultando el Excel: {e}")
+            st.error(f"Error al procesar la consulta: {e}")
 
 
