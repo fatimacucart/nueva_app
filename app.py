@@ -64,10 +64,11 @@ if st.button("Consultar 🤖"):
                 # 🤖 CREAMOS EL LLM Y EL AGENTE AQUÍ ADENTRO
                 # Solo cuando el usuario hace clic, asegurando que la API KEY ya existe.
                 llm = ChatGroq(
-                    groq_api_key=api_key, # Pasamos la clave directamente
+                    api_key=api_key, # Pasamos la clave directamente
                     model="llama-3.3-70b-versatile",
                     temperature=0.2
                 )
+                
 
                 agent = create_pandas_dataframe_agent(
                     llm,
