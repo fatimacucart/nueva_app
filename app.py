@@ -3,9 +3,10 @@ import streamlit as st
 import pandas as pd
 from langchain_groq import ChatGroq
 from langchain_experimental.agents import create_pandas_dataframe_agent
+from langchain.agents import AgentType
 
 st.set_page_config(page_title="Excel AI 🤖", page_icon="📊")
-st.title("Habla con tu Excel gracias a la IA")
+st.title("💬📂 Habla con tu Excel gracias a la IA")
 
 # --- SIDEBAR: API KEY ---
 st.sidebar.header("🔐 Configuración")
@@ -24,8 +25,8 @@ if not os.path.exists(EXCEL_PATH):
     st.stop()
 
 @st.cache_data
-def load_data(path):
-    return pd.read_excel(path, engine='openpyxl')
+def load_data(path: str) -> pd.DataFrame:
+    return pd.read_excel(path, engine="openpyxl")
 
 try:
     df = load_data(EXCEL_PATH)
@@ -44,36 +45,33 @@ question = st.text_input("Haz una pregunta sobre el Excel:")
 if st.button("Consultar 🤖"):
     if not question:
         st.warning("Escribe una pregunta.")
-    else:
-        with st.spinner("Analizando..."):
-            try:
-                # 1. Forzamos la inicialización del modelo
-                llm = ChatGroq(
-                    groq_api_key=api_key, 
-                    model_name="llama-3.3-70b-versatile",
-                    temperature=0.2
-                )
+        st.stop()
 
-                # 2. Verificación de seguridad para evitar el NoneType
-                if llm is None:
-                    st.error("El modelo no se pudo inicializar correctamente.")
-                    st.stop()
+    with st.spinner("Analizando..."):
+        try:
+            llm = ChatGroq(
+                groq_api_key=api_key,
+                model_name="llama-3.3-70b-versatile",
+                temperature=0.2,
+            )
 
-                # 3. Creación del agente con el formato más compatible posible
-                agent = create_pandas_dataframe_agent(
-                    llm,
-                    df,
-                    verbose=False,
-                    allow_dangerous_code=True,
-                    agent_type="tool-calling", # Obligatorio para evitar errores de Runnable
-                )
+            agent = create_pandas_dataframe_agent(
+                llm=llm,
+                df=df,
+                verbose=False,
+                allow_dangerous_code=True,
+                agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+            )
 
-                # 4. Invocación usando la nueva sintaxis de LangChain
-                response = agent.invoke({"input": question})
-                
-                st.success("Resultado:")
-                st.markdown(response["output"])
+            result = agent.invoke({"input": question})
 
-            except Exception as e:
-                st.error(f"Error consultando el Excel: {e}")
+            # LangChain a veces devuelve dict con "output" y a veces texto/objeto
+            output = result.get("output") if isinstance(result, dict) else str(result)
+
+            st.success("Resultado:")
+            st.markdown(output)
+
+        except Exception as e:
+            st.error(f"Error consultando el Excel: {e}")
+
 
